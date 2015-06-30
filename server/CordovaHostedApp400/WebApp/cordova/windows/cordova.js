@@ -850,10 +850,22 @@ module.exports = function (success, fail, service, action, args) {
 
     if (proxy) {
         callbackId = service + cordova.callbackId++;
-        // console.log("EXEC:" + service + " : " + action);
+
+        // async bridge for x-ms-webview
+        window.external.notify(JSON.stringify({
+            service: service,
+            action: action,
+            args: args,
+            callbackId: callbackId
+        }));
+
         if (typeof success === "function" || typeof fail === "function") {
             cordova.callbacks[callbackId] = {success: success, fail: fail};
         }
+
+        return;
+
+        // It will be called on client instead
         try {
             // callbackOptions param represents additional optional parameters command could pass back, like keepCallback or
             // custom callbackId, for example {callbackId: id, keepCallback: true, status: cordova.callbackStatus.JSON_EXCEPTION }
@@ -911,6 +923,65 @@ module.exports = function (success, fail, service, action, args) {
 };
 
 });
+
+define("cordova/exec/callback", function (require, exports, module) {
+    /*jslint sloppy:true, plusplus:true*/
+    /*global require, module, console */
+
+    var cordova = require('cordova');
+
+    module.exports = {
+        onSuccess: function (opts) {
+            var optsObj = JSON.parse(opts);
+            var result = optsObj.result,
+                callbackOptions = optsObj.callbackOptions;
+
+            callbackOptions = callbackOptions || {};
+            var callbackStatus;
+            // covering both undefined and null.
+            // strict null comparison was causing callbackStatus to be undefined
+            // and then no callback was called because of the check in cordova.callbackFromNative
+            // see CB-8996 Mobilespec app hang on windows
+            if (callbackOptions.status !== undefined && callbackOptions.status !== null) {
+                callbackStatus = callbackOptions.status;
+            }
+            else {
+                callbackStatus = cordova.callbackStatus.OK;
+            }
+            cordova.callbackSuccess(callbackOptions.callbackId || callbackId,
+                {
+                    status: callbackStatus,
+                    message: result,
+                    keepCallback: callbackOptions.keepCallback || false
+                });
+        },
+        onError: function (opts) {
+            var optsObj = JSON.parse(opts);
+            var err = optsObj.err,
+                callbackOptions = optsObj.callbackOptions;
+
+            callbackOptions = callbackOptions || {};
+            var callbackStatus;
+            // covering both undefined and null.
+            // strict null comparison was causing callbackStatus to be undefined
+            // and then no callback was called because of the check in cordova.callbackFromNative
+            // see CB-8996 Mobilespec app hang on windows
+            if (callbackOptions.status !== undefined && callbackOptions.status !== null) {
+                callbackStatus = callbackOptions.status;
+            }
+            else {
+                callbackStatus = cordova.callbackStatus.OK;
+            }
+            cordova.callbackError(callbackOptions.callbackId || callbackId,
+                {
+                    status: callbackStatus,
+                    message: err,
+                    keepCallback: callbackOptions.keepCallback || false
+                });
+        }
+    };
+});
+
 
 // file: src/common/exec/proxy.js
 define("cordova/exec/proxy", function(require, exports, module) {

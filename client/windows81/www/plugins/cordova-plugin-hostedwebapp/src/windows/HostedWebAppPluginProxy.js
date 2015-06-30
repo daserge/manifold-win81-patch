@@ -8,6 +8,7 @@ var _enableOfflineSupport = true;
 var _lastKnownLocation;
 var _lastKnownLocationFailed = false;
 var _whiteList = [];
+var webViewGlob;
 
 // creates a webview to host content
 function configureHost(url, zOrder, display) {
@@ -25,14 +26,69 @@ function configureHost(url, zOrder, display) {
 
     if (url) {
         webView.src = url;
+        webViewGlob = webView;
     }
 
     webView.addEventListener("MSWebViewNavigationCompleted", navigationCompletedEvent, false);
     webView.addEventListener("MSWebViewNavigationStarting", navigationStartingEvent, false);
+    webView.addEventListener("MSWebViewScriptNotify", scriptNotify);
 
     document.body.appendChild(webView);
 
     return webView;
+}
+
+function scriptNotify(e) {
+    console.log('scriptNotify e: ' + e.value);
+    var opts = JSON.parse(e.value);
+    var callbackId = opts.callbackId;
+
+    var exec = cordova.require('cordova/exec');
+
+    function success(result, callbackOptions) {
+        callbackOptions = callbackOptions || {};
+        callbackOptions.callbackId = callbackId;
+        var op = webViewGlob.invokeScriptAsync('execCallback', JSON.stringify({
+            success: true,
+            result: result,
+            callbackOptions: callbackOptions
+        }));
+
+        op.oncomplete = function (args) {
+            console.log('success op.oncomplete');
+        };
+
+        op.onerror = function (e) {
+            console.log('success op.onerror: ' + e + ': ' + JSON.stringify(e));
+        };
+
+        op.start();
+    }
+
+    function fail(err, callbackOptions) {
+        callbackOptions = callbackOptions || {};
+        callbackOptions.callbackId = callbackId;
+        var op = webViewGlob.invokeScriptAsync('window.execCallback', JSON.stringify({
+            success: false,
+            err: err,
+            callbackOptions: callbackOptions
+        }));
+
+        op.oncomplete = function (args) {
+            console.log('fail op.oncomplete');
+        };
+
+        op.onerror = function (e) {
+            console.log('fail op.onerror: ' + e + ': ' + JSON.stringify(e));
+        };
+
+        op.start();
+    }
+
+    exec(success, fail,
+        opts.service,
+        opts.action,
+        opts.args);
 }
 
 // handles webview's navigation starting event

@@ -127,6 +127,19 @@ var GLOB = (function () {
                 console.log('window.test: ' + window.test);
             }
         });
+
+        window.execCallback = function (opts) {
+            console.log('HOST window.execCallback');
+            var optsObj = JSON.parse(opts);
+            var execCb = window.cordova.require('cordova/exec/callback');
+
+            if (optsObj.success === true) {
+                execCb.onSuccess(opts);
+            } else {
+                execCb.onError(opts);
+            }
+        };
+        console.log("window.execCallback: " + window.execCallback);
     };
 
     function onPause() {
